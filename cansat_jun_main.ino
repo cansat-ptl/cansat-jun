@@ -1,5 +1,5 @@
 /* #------------CanSat-junior-control------------# *
- * |               v 0.6.9-bleeding              | *
+ * |                v 1.1.3-staging              | *
  * |  Made by ThePetrovich for SJSA CanSat team  | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -7,7 +7,7 @@
  * |        GY-801 IMU board                     | *
  * |        UART radio                           | *
  * |        a bootleg shift register             | *
- * |        NEO-6M UART GPS                      | *
+ * |		someting i forgot                    | *
  * |                                             | *
  * #---------------------------------------------# */
  
@@ -39,9 +39,11 @@
 	LRES - light sensor pin (default: A2). Used to determine if cansat was detached from the rocket. INT
 	SERVO - servomotor pin (default: 13). INT
 	CALLSIGN - satellite callsign, should be as short as possible. STRING
+	ASL - pressure at sea level (in Pa)
    2) SPI-specific
-    Register_ID - TBD
-	Register_2D - TBD
+    Register_ID - ADXL345 unique ID
+	Register_2D - ADLX345 power control register
+	Register_FORMAT - ADXL345 data resolution register. (default: 0x31). Set this to 0x03 to get 16g resolution. For more info, see ADXL345 datasheet.
 	Register_X0 - ADXL345 X axis register #0 (default: 0x22). Used for I2C communication.
 	Register_X1 - ADXL345 X axis register #1 (default: 0x33). Used for I2C communication.
 	Register_Y0 - ADXL345 Y axis register #0 (default: 0x34). Used for I2C communication.
@@ -62,13 +64,17 @@
 #define VREF 4.5F
 #define VDIV 2
 #define BAT A0
-#define LED1 12
+#define LED1 13
 #define BUZZ A1
 #define LRES A2
+#define LVAL 450
 #define SERVO 12
 #define CALLSIGN "YKTSAT4"
+#define ASL 101325.0F
+#define VER "CJC v1.1.3-staging compiled 28.10.2018 10:22 YAKT"
 
 #define Register_ID 0
+#define Register_FORMAT 0x31
 #define Register_2D 0x2D
 #define Register_X0 0x32
 #define Register_X1 0x33
@@ -100,6 +106,9 @@ long b5 = 0;
 volatile bool enabled = 1;
 volatile bool deployed = 0;
 int angle = 90;
+bool detach = 0;
+float baseAlt = 0;
+int darkness = LVAL;
 
 /* Working with BMP085 using I2c */
 void bmp085init(){
@@ -202,13 +211,18 @@ unsigned long bmp085ReadUP(){
 }
 float calcAltitude(float prs){
 	if (prs == 0) return -1;
-	return log(101325.0/prs)*7238.3;
+	return 44330.0 * (1.0 - pow(prs / ASL, 0.1903));
 }
 /* Working with ADXL345 using I2c */
 void adxl345init(){
 	Wire.beginTransmission(ADXAddress);
 	Wire.write(Register_2D);
-	Wire.write(8);               
+	Wire.write(8);     
+	Wire.endTransmission();	
+	delay(50);
+	Wire.beginTransmission(ADXAddress);
+	Wire.write(Register_FORMAT);
+	Wire.write(0x03);   	
 	Wire.endTransmission();
 }
 void adxl345request(byte r1, byte r2){
@@ -228,7 +242,7 @@ double adxl345readX(){
 		X1=X1<<8;
 		X_out=X0+X1;   
 	}
-	Xg=X_out/256.0;
+	Xg=X_out/32.0;
 	return Xg;
 }
 double adxl345readY(){
@@ -241,7 +255,7 @@ double adxl345readY(){
 		Y1=Y1<<8;
 		Y_out=Y0+Y1;
 	}
-	Yg=Y_out/256.0;
+	Yg=Y_out/32.0;
 	return Yg;
 }
 double adxl345readZ(){
@@ -254,7 +268,7 @@ double adxl345readZ(){
 		Z1=Z1<<8;
 		Z_out=Z0+Z1;
 	}
-	Zg=Z_out/256.0;
+	Zg=Z_out/32.0;
 	return Zg;
 }
 /* Working with HMC5883 using I2c */
@@ -316,8 +330,8 @@ void shiftOut(byte data) {
 		digitalWrite(S_DATA, pinState);
 		digitalWrite(S_CLK, 1);
 		digitalWrite(S_DATA, 0);
-  }
-  digitalWrite(S_CLK, 0);
+	}
+	digitalWrite(S_CLK, 0);
 }
 /* LED blink */
 void blink(){
@@ -343,23 +357,49 @@ void sendData(String data){
 }
 
 void setup(){
+	delay(5000);
 	Serial.begin(9600);
 	ss.begin(9600);
+	sendData("Running "+String(VER));
 	sendData("WARMUP");
+	
 	myservo.attach(SERVO);
-	myservo.write(angle);
+	myservo.write(5);
+	myservo.detach();
+	delay(250);
+	sendData("SERVO OK");
+	darkness = analogRead(LRES);
+	while (analogRead(LRES)+50 >= darkness){
+		sendData("WAITING");
+		delay(1000);
+	}
+	sendData("LOCK");
+	myservo.attach(SERVO);
+	myservo.write(90);
+	delay(2000);
+	myservo.detach();
+	
 	Wire.begin();
 	sendData("I2C OK");
 	gyro.enableDefault();
 	delay(50);
-	sendData("HMC OK");
+	sendData("L3G OK");
+	
 	bmp085init();
+	float temp = 0;
+	bmp085GetTemperature(bmp085ReadUT()); 
+	temp = bmp085GetPressure(bmp085ReadUP());
+	baseAlt = calcAltitude(temp);
 	delay(50);
 	sendData("BMP OK");
+	
+	HMC5883init();
+	delay(50);
+	sendData("HMC OK");
+	
 	adxl345init();
 	delay(50);
 	sendData("ADXL OK");
-	HMC5883init();
 	delay(1000);
 	
 	pinMode(S_SCLK, OUTPUT);
@@ -371,46 +411,45 @@ void setup(){
 	digitalWrite(S_SCLK, 1);
 	sendData("SR OK");
 	delay(1000);
+	
 	SD.begin(SD_CS);
 	sendData("SD OK");
+	delay(250);	
 	
-	delay(250);
-	sendData("TIMER OK");
-	delay(250);
 	sendData("INIT OK");
-
-	myservo.detach();
+	delay(2000);
+	
 }
 void loop(){
 	gyro.read();
-	static float data[13];
-	String dataL[] = {"T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
+	static float data[14];
+	String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
 	String buffer0;
-
-	data[0] = bmp085GetTemperature(bmp085ReadUT()); 
-	data[1] = bmp085GetPressure(bmp085ReadUP());
-	data[2] = analogRead(BAT); 
-	data[3] = calcAltitude(data[1]);
+	data[0] = millis()/1000;
+	data[1] = bmp085GetTemperature(bmp085ReadUT()); 
+	data[2] = bmp085GetPressure(bmp085ReadUP());
+	data[3] = analogRead(BAT); 
+	data[4] = calcAltitude(data[2]) - baseAlt;
+	if (data[4] < 0) data[4] = 0;
 	//Making a data packet
-	for(int i = 0; i < 4; i++){ //4 variables at once
+	for(int i = 0; i < 5; i++){ //5 variables at once
 		buffer0 += dataL[i]; //Adding data labels
 		buffer0 += data[i]; //Adding data
 		buffer0 += " "; //Separator
 	}
 	sendData(buffer0);
 	buffer0 = ""; //Resetting the buffer
-	
-	data[4] = adxl345readX();
-	data[5] = adxl345readY();
-	data[6] = adxl345readZ();
-	data[7] = HMC5883readX();
-	data[8] = HMC5883readY();
-	data[9] = HMC5883readZ();
-	data[10] = (int)gyro.g.x;
-	data[11] = (int)gyro.g.y;
-	data[12] = (int)gyro.g.z;
+	data[5] = adxl345readX();
+	data[6] = adxl345readY();
+	data[7] = adxl345readZ();
+	data[8] = HMC5883readX();
+	data[9] = HMC5883readY();
+	data[10] = HMC5883readZ();
+	data[11] = (int)gyro.g.x;
+	data[12] = (int)gyro.g.y;
+	data[13] = (int)gyro.g.z;
 	//Making a data packet
-	for(int i = 4; i < 13; i++){ //9 variables at once
+	for(int i = 5; i < 14; i++){ //9 variables at once
 		buffer0 += dataL[i];
 		buffer0 += data[i];
 		buffer0 += " ";
@@ -419,20 +458,23 @@ void loop(){
 	buffer0 = "";
 	int light = 0;
 	light = analogRead(LRES);
-	if(light >= 650 && !deployed){
-		sendData("DETACH");
-		
-		delay(2000);
+	if (detach && !deployed){
 		myservo.attach(SERVO);
 		angle = 5;
 		myservo.write(angle);
-		delay(1000);
+		delay(500);
 		myservo.detach();
-		sendData("DEPLOY");
+		sendData("DEPLOY " + String(millis()/1000));
 		deployed = true;
 	}
-	Serial.println(light);
+	if(light >= darkness-50 && !deployed){
+		sendData("DETACH " + String(millis()/1000));
+		detach = true;
+		delay(500);
+	}
+	//Serial.println(light);
 	delay(750);
+	//SR output
 	const static byte a[9] = {B00000000, B00000010, B00000110, B00001110, B00011110, B00111110, B01111110, B11111110, B11111111}; //Shift register values array
 	digitalWrite(S_SCLK, 0); 
 	int n = int(analogRead(BAT)/128); //Trying to 'guess' battery voltage
@@ -440,7 +482,6 @@ void loop(){
 	shiftOut(a[n]); //Sending out battery level indication
 	digitalWrite(S_SCLK, 1); 
 	blink();
-	
 }
 /* Timer interrupt handler */
 
