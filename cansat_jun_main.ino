@@ -1,5 +1,5 @@
 /* #------------CanSat-junior-control------------# *
- * |                v 1.1.3-staging              | *
+ * |                v 1.2.1-staging              | *
  * |  Made by ThePetrovich for SJSA CanSat team  | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -11,10 +11,6 @@
  * |                                             | *
  * #---------------------------------------------# */
  
-/*
-   INLCLUDES
-   Timer-api by sadr0b0t: https://habr.com/post/337430/
-*/
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
@@ -71,7 +67,7 @@
 #define SERVO 12
 #define CALLSIGN "YKTSAT4"
 #define ASL 101325.0F
-#define VER "CJC v1.1.3-staging compiled 28.10.2018 10:22 YAKT"
+#define VER "CJC v1.2.1-staging compiled 21.11.2018 23:55 YAKT"
 
 #define Register_ID 0
 #define Register_FORMAT 0x31
@@ -109,6 +105,9 @@ int angle = 90;
 bool detach = 0;
 float baseAlt = 0;
 int darkness = LVAL;
+//I'm too lazy to use pointers or 2d char arrays, so i'll just make a global sting array
+//:D
+String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
 
 /* Working with BMP085 using I2c */
 void bmp085init(){
@@ -209,9 +208,10 @@ unsigned long bmp085ReadUP(){
     up = (((unsigned long) msb << 16) | ((unsigned long) lsb << 8) | (unsigned long) xlsb) >> (8-OSS); 
     return up;
 }
-float calcAltitude(float prs){
+int calcAltitude(int prs){
 	if (prs == 0) return -1;
-	return 44330.0 * (1.0 - pow(prs / ASL, 0.1903));
+    //weird contraptions to make everything int
+	return (int) (44330.0 * (1.0 - pow((float) prs / ASL, 0.1903)))*10;
 }
 /* Working with ADXL345 using I2c */
 void adxl345init(){
@@ -232,7 +232,7 @@ void adxl345request(byte r1, byte r2){
 	Wire.endTransmission();
 	Wire.requestFrom(ADXAddress,2); 
 }
-double adxl345readX(){
+int adxl345readX(){
 	int X0 = 0,X1 = 0,X_out = 0;
 	double Xg;
 	adxl345request(Register_X0, Register_X1);
@@ -242,10 +242,10 @@ double adxl345readX(){
 		X1=X1<<8;
 		X_out=X0+X1;   
 	}
-	Xg=X_out/32.0;
-	return Xg;
+	Xg=(X_out/32.0)*10;
+	return (int)Xg;
 }
-double adxl345readY(){
+int adxl345readY(){
 	int Y0 = 0,Y1 = 0,Y_out = 0;
 	double Yg;
 	adxl345request(Register_Y0, Register_Y1);
@@ -255,10 +255,10 @@ double adxl345readY(){
 		Y1=Y1<<8;
 		Y_out=Y0+Y1;
 	}
-	Yg=Y_out/32.0;
-	return Yg;
+	Yg=(Y_out/32.0)*10;
+	return (int)Yg;
 }
-double adxl345readZ(){
+int adxl345readZ(){
 	int Z1 = 0,Z0 = 0,Z_out = 0;
 	double Zg;
 	adxl345request(Register_Z0, Register_Z1);
@@ -268,8 +268,8 @@ double adxl345readZ(){
 		Z1=Z1<<8;
 		Z_out=Z0+Z1;
 	}
-	Zg=Z_out/32.0;
-	return Zg;
+	Zg=(Z_out/32.0);
+	return (int)Zg;
 }
 /* Working with HMC5883 using I2c */
 void HMC5883init(){
@@ -344,7 +344,16 @@ void blink(){
 		enabled = false;
 	}	
 }
-/*Function for data transmission */
+void formPacket(int * data, int start, int amount){
+    string buffer0;
+    for(int = start; i < (start + amount); i++){ //5 variables at once
+		buffer0 += dataL[i]; //Adding data labels
+		buffer0 += String(*(data+i)); //Adding data
+		buffer0 += " "; //Separator
+	}
+    sendData(buffer0);
+}
+/* Function for data transmission */
 void sendData(String data){
 	data = String(CALLSIGN) + ": " + data + ";\n";
 	Serial.print(data);
@@ -420,43 +429,8 @@ void setup(){
 	delay(2000);
 	
 }
-void loop(){
-	gyro.read();
-	static float data[14];
-	String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
-	String buffer0;
-	data[0] = millis()/1000;
-	data[1] = bmp085GetTemperature(bmp085ReadUT()); 
-	data[2] = bmp085GetPressure(bmp085ReadUP());
-	data[3] = analogRead(BAT); 
-	data[4] = calcAltitude(data[2]) - baseAlt;
-	if (data[4] < 0) data[4] = 0;
-	//Making a data packet
-	for(int i = 0; i < 5; i++){ //5 variables at once
-		buffer0 += dataL[i]; //Adding data labels
-		buffer0 += data[i]; //Adding data
-		buffer0 += " "; //Separator
-	}
-	sendData(buffer0);
-	buffer0 = ""; //Resetting the buffer
-	data[5] = adxl345readX();
-	data[6] = adxl345readY();
-	data[7] = adxl345readZ();
-	data[8] = HMC5883readX();
-	data[9] = HMC5883readY();
-	data[10] = HMC5883readZ();
-	data[11] = (int)gyro.g.x;
-	data[12] = (int)gyro.g.y;
-	data[13] = (int)gyro.g.z;
-	//Making a data packet
-	for(int i = 5; i < 14; i++){ //9 variables at once
-		buffer0 += dataL[i];
-		buffer0 += data[i];
-		buffer0 += " ";
-	}
-	sendData(buffer0);
-	buffer0 = "";
-	int light = 0;
+void handleServo(){
+    int light = 0;
 	light = analogRead(LRES);
 	if (detach && !deployed){
 		myservo.attach(SERVO);
@@ -472,15 +446,43 @@ void loop(){
 		detach = true;
 		delay(500);
 	}
-	//Serial.println(light);
-	delay(750);
-	//SR output
-	const static byte a[9] = {B00000000, B00000010, B00000110, B00001110, B00011110, B00111110, B01111110, B11111110, B11111111}; //Shift register values array
+}
+void handleIndicators(){
+    const static byte a[9] = {B00000000, B00000010, B00000110, B00001110, B00011110, B00111110, B01111110, B11111110, B11111111}; //Shift register values array
 	digitalWrite(S_SCLK, 0); 
 	int n = int(analogRead(BAT)/128); //Trying to 'guess' battery voltage
 	if (n > 8) n = 8; //We have 8 bits on S/R, so the value shoud not exceed 8
 	shiftOut(a[n]); //Sending out battery level indication
 	digitalWrite(S_SCLK, 1); 
+}
+
+void loop(){
+	gyro.read();
+	static int data[14];
+	//String buffer0;
+	data[0] = millis()/1000;
+	data[1] = bmp085GetTemperature(bmp085ReadUT()); 
+	data[2] = bmp085GetPressure(bmp085ReadUP());
+	data[3] = analogRead(BAT); 
+	data[4] = calcAltitude(data[2]) - baseAlt;
+	if (data[4] < 0) data[4] = 0;
+	data[5] = adxl345readX();
+	data[6] = adxl345readY();
+	data[7] = adxl345readZ();
+	data[8] = HMC5883readX();
+	data[9] = HMC5883readY();
+	data[10] = HMC5883readZ();
+	data[11] = (int)gyro.g.x;
+	data[12] = (int)gyro.g.y;
+	data[13] = (int)gyro.g.z;
+    
+    formPacket(data, 0, 5);
+    formPacket(data, 5, 9);
+    
+    handleServo();
+    handleIndicators();
+    
+	delay(750);
 	blink();
 }
 /* Timer interrupt handler */
