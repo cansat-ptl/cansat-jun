@@ -16,7 +16,6 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
-#include <SoftwareSerial.h>
 #include <Servo.h>
 #include "l3g4200d.h"
 #include "adxl345.h"
@@ -55,6 +54,7 @@
    LIBRARY SETUP
 */
 L3G4200D gyro;
+TinyGPSPlus gps;
 
 float baseAlt = 0;
 String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
@@ -70,10 +70,11 @@ void formPacket(int * data, int start, int amount){
 }
 
 void sendData(String data){
-	data = String(CALLSIGN) + ": " + data + ";\n";
-	Serial.print(data);
+	data = String(CALLSIGN) + "[MAIN]: " + data + ";\n";
+	//Serial.print(data);
 	Serial1.print(data);
 	File dataFile = SD.open("yktsat5.log", FILE_WRITE);
+	Serial1.print(String(CALLSIGN)+ "[GPS]:"); printInt(gps.satellites.value(), gps.satellites.isValid(), 2); Serial1.print(F(" LAT=")); printFloat(gps.location.lat(), gps.location.isValid(), 11, 6); Serial1.print(F(" LON=")); printFloat(gps.location.lng(), gps.location.isValid(), 11, 6); Serial1.print(F(" SPD=")); printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2); Serial1.print(F(" DT=")); printDateTime(gps.date, gps.time);Serial1.println();
 	if (dataFile) {
 		dataFile.println(data);
 		dataFile.close();
