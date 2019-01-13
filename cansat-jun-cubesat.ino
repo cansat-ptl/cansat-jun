@@ -1,5 +1,5 @@
 /* #---------------Cubesat-control---------------# *
- * |               v 0.0.3-bleeding              | *
+ * |               v 0.0.5-bleeding              | *
  * |  A cansat-jun fork for SiriusSat            | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -25,30 +25,17 @@
 
 /* 
    DEFINES:
-    S_DATA - shift register serial data interface pin (default: 9). Used for S/R data transmission. INT
-    S_CLK - shift register clock pin (default: 11). Used for S/R data transmission. INT
-    S_SCKL - shift register refresh pin (default: 10). Pulldown this to GND to reset the shift register, must be done after each data transfer. INT
     SD_CS - sdcard SPI chip select pin (default: 4). Pulldown this pin to GND to set up the SD card. Must be disabled while operating. INT
-    TX_CS - radio transmitter enable pin (default: 8). Pulldown this pin to GND to do i don't know what. Must be disabled during operation. INT
-    TX_SET - radio transmitter setup pin (default: 7). Pulldown this pin to GND to use AT commands. Must be disabled during operation. INT
     VREF - battery reference voltage (default: 4.5F). Used to determine battery charge level. This voltage is made by voltage divider. FLOAT
     VDIV - voltage divider coefficient (default: 2). DO NOT CHANGE FLOAT
-    BAT - battery voltage measurement pin (default: A0). INT
-    LED1 - something led pin (default: 12). Indicates something. INT
-    BUZZ - search buzzer pin (default: A1). Helps you to find your cansat by emitting sound. INT
-    LRES - light sensor pin (default: A2). Used to determine if cansat was detached from the rocket. INT
-    SERVO - servomotor pin (default: 13). INT
     CALLSIGN - satellite callsign, should be as short as possible. STRING
-    ASL - pressure at sea level (in Pa)
 */
 
 #define SD_CS 4
 #define VREF 4.5F
 #define VDIV 2
-#define BUZZ A1
-#define LRES A2
 #define CALLSIGN "YKTSAT5"
-#define VER "CubesatControl v0.0.3-bleeding"
+#define VER "CubesatControl v0.0.5-bleeding"
 
 /*
    LIBRARY SETUP
