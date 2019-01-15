@@ -1,5 +1,5 @@
 /* #---------------Cubesat-control---------------# *
- * |               v 0.0.9-bleeding              | *
+ * |               v 0.1.0-bleeding              | *
  * |  A cansat-jun fork for SiriusSat            | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -16,7 +16,8 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
-#include <Servo.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include "l3g4200d.h"
 #include "adxl345.h"
 #include "hmc5883.h"
@@ -35,17 +36,22 @@
 #define VREF 4.5F
 #define VDIV 2
 #define CALLSIGN "YKTSAT5"
-#define VER "CubesatControl v0.0.9-bleeding"
+#define VER "CubesatControl v0.1.0-bleeding"
+#define ONE_WIRE_BUS 2
+#define TEMPERATURE_PRECISION 8
 
 /*
    LIBRARY SETUP
 */
 L3G4200D gyro;
 TinyGPSPlus gps;
+OneWire oneWire(ONE_WIRE_BUS); 
+DallasTemperature sensors(&oneWire);
+DeviceAddress insideThermometer, outsideThermometer;
 
 unsigned short int timer = 0;
 float baseAlt = 0;
-String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
+String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ=", "IT=", "OT="}; //Data labels
 
 void formPacket(int * data, int start, int amount){
     String buffer0;
@@ -66,8 +72,22 @@ void sendData(String data){
 		dataFile.close();
 	}
 }
+
 void sendgps(){
 	Serial1.print(String(CALLSIGN)+ "[GPS]:"); printInt(gps.satellites.value(), gps.satellites.isValid(), 2); Serial1.print(F(" LAT=")); printFloat(gps.location.lat(), gps.location.isValid(), 11, 6); Serial1.print(F(" LON=")); printFloat(gps.location.lng(), gps.location.isValid(), 11, 6); Serial1.print(F(" SPD=")); printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2); Serial1.print(F(" DT=")); printDateTime(gps.date, gps.time);Serial1.println();
+}
+int ds18b20init(){
+	int count = 0;
+	sensors.begin();
+	count = sensors.getDeviceCount();
+	if (!sensors.getAddress(insideThermometer, 0)) return -1;
+    if (!sensors.getAddress(outsideThermometer, 1)) return -2;
+	sensors.setResolution(insideThermometer, TEMPERATURE_PRECISION);
+    sensors.setResolution(outsideThermometer, TEMPERATURE_PRECISION);
+	return count;
+}
+void ds18b20read(int *temp, DeviceAddress deviceAddress){
+	*temp = (sensors.getTempC(deviceAddress))*10;
 }
 
 void setup(){
@@ -100,10 +120,13 @@ void setup(){
 	adxl345init();
 	delay(50);
 	sendData("ADXL OK");
-	delay(1000);
 	
 	SD.begin(SD_CS);
 	sendData("SD OK");
+	delay(50);	
+	
+	ds18b20init();
+	sendData("DS18 OK");
 	delay(50);	
 	
 	sendData("INIT OK");
@@ -114,7 +137,7 @@ void setup(){
 void loop(){
 	timer = millis();
 	gyro.read();
-	static int data[14];
+	static int data[16];
 	data[0] = millis()/1000;
 	data[1] = bmp085GetTemperature(bmp085ReadUT()); 
 	data[2] = bmp085GetPressure(bmp085ReadUP());
@@ -130,11 +153,13 @@ void loop(){
 	data[11] = (int)gyro.g.x;
 	data[12] = (int)gyro.g.y;
 	data[13] = (int)gyro.g.z;
+	ds18b20read(data+14, insideThermometer);
+	ds18b20read(data+15, outsideThermometer);
     
     formPacket(data, 0, 5);
-    formPacket(data, 5, 9);
+    formPacket(data, 5, 11);
     sendgps();
-	delay(1000-(millis-timer));
+	delay(1000-(millis()-timer));
 }
 
 	
