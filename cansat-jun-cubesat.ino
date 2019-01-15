@@ -1,5 +1,5 @@
 /* #---------------Cubesat-control---------------# *
- * |               v 0.0.5-bleeding              | *
+ * |               v 0.0.9-bleeding              | *
  * |  A cansat-jun fork for SiriusSat            | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -35,7 +35,7 @@
 #define VREF 4.5F
 #define VDIV 2
 #define CALLSIGN "YKTSAT5"
-#define VER "CubesatControl v0.0.5-bleeding"
+#define VER "CubesatControl v0.0.9-bleeding"
 
 /*
    LIBRARY SETUP
@@ -43,6 +43,7 @@
 L3G4200D gyro;
 TinyGPSPlus gps;
 
+unsigned short int timer = 0;
 float baseAlt = 0;
 String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
 
@@ -58,14 +59,15 @@ void formPacket(int * data, int start, int amount){
 
 void sendData(String data){
 	data = String(CALLSIGN) + "[MAIN]: " + data + ";\n";
-	//Serial.print(data);
 	Serial1.print(data);
 	File dataFile = SD.open("yktsat5.log", FILE_WRITE);
-	Serial1.print(String(CALLSIGN)+ "[GPS]:"); printInt(gps.satellites.value(), gps.satellites.isValid(), 2); Serial1.print(F(" LAT=")); printFloat(gps.location.lat(), gps.location.isValid(), 11, 6); Serial1.print(F(" LON=")); printFloat(gps.location.lng(), gps.location.isValid(), 11, 6); Serial1.print(F(" SPD=")); printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2); Serial1.print(F(" DT=")); printDateTime(gps.date, gps.time);Serial1.println();
 	if (dataFile) {
 		dataFile.println(data);
 		dataFile.close();
 	}
+}
+void sendgps(){
+	Serial1.print(String(CALLSIGN)+ "[GPS]:"); printInt(gps.satellites.value(), gps.satellites.isValid(), 2); Serial1.print(F(" LAT=")); printFloat(gps.location.lat(), gps.location.isValid(), 11, 6); Serial1.print(F(" LON=")); printFloat(gps.location.lng(), gps.location.isValid(), 11, 6); Serial1.print(F(" SPD=")); printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2); Serial1.print(F(" DT=")); printDateTime(gps.date, gps.time);Serial1.println();
 }
 
 void setup(){
@@ -77,16 +79,18 @@ void setup(){
 	
 	Wire.begin();
 	sendData("I2C OK");
+	delay(50);
+	
 	gyro.enableDefault();
 	delay(50);
 	sendData("L3G OK");
 	
 	bmp085init();
+	delay(50);
 	float temp = 0;
 	bmp085GetTemperature(bmp085ReadUT()); 
 	temp = bmp085GetPressure(bmp085ReadUP());
 	baseAlt = calcAltitude(temp);
-	delay(50);
 	sendData("BMP OK");
 	
 	HMC5883init();
@@ -100,14 +104,15 @@ void setup(){
 	
 	SD.begin(SD_CS);
 	sendData("SD OK");
-	delay(250);	
+	delay(50);	
 	
 	sendData("INIT OK");
-	delay(2000);
+	delay(500);
 	
 }
 
 void loop(){
+	timer = millis();
 	gyro.read();
 	static int data[14];
 	data[0] = millis()/1000;
@@ -128,8 +133,8 @@ void loop(){
     
     formPacket(data, 0, 5);
     formPacket(data, 5, 9);
-    
-	delay(750);
+    sendgps();
+	delay(1000-(millis-timer));
 }
 
 	

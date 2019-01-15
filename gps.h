@@ -8,9 +8,9 @@
 
 extern TinyGPSPlus gps;
 
-static void smartDelay(unsigned long ms);
-static void printFloat(float val, bool valid, int len, int prec);
-static void printInt(unsigned long val, bool valid, int len);
-static void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
+void smartDelay(unsigned long ms);
+void printFloat(float val, bool valid, int len, int prec);
+void printInt(unsigned long val, bool valid, int len);
+void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
 
 #endif

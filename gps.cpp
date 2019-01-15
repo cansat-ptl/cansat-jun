@@ -1,16 +1,16 @@
 #include "gps.h"
 #include <Arduino.h>
 
-TinyGPSPlus gps;
+extern TinyGPSPlus gps;
 
-static void smartDelay(unsigned long ms){
+void smartDelay(unsigned long ms){
     unsigned long start = millis();
     do {
       while (Serial.available())
           gps.encode(Serial.read());
     }   while (millis() - start < ms);
 }
-static void printFloat(float val, bool valid, int len, int prec){
+void printFloat(float val, bool valid, int len, int prec){
     if (!valid){
         while (len-- > 1)
             Serial1.print('*');
@@ -26,7 +26,7 @@ static void printFloat(float val, bool valid, int len, int prec){
     }
     smartDelay(0);
 }
-static void printInt(unsigned long val, bool valid, int len){
+void printInt(unsigned long val, bool valid, int len){
     char sz[32] = "*****************";
     if (valid)
         sprintf(sz, "%ld", val);
@@ -38,7 +38,7 @@ static void printInt(unsigned long val, bool valid, int len){
     Serial1.print(sz);
     smartDelay(0);
 }
-static void printDateTime(TinyGPSDate &d, TinyGPSTime &t){
+void printDateTime(TinyGPSDate &d, TinyGPSTime &t){
     if (!d.isValid()){
         Serial1.print(F("NO_DATA "));
     }
