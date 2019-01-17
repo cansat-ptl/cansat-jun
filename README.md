@@ -1,2 +1,3 @@
 # cansat-jun
-sample text
+Pid library by Brett Beauregard <br3ttb@gmail.com>
+https://github.com/br3ttb/Arduino-PID-Library
