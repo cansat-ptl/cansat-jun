@@ -46,9 +46,9 @@ class L3G4200D
 		
 		vector g; // gyro angular velocity readings
 
-		void enableDefault(void);
+		int enableDefault(void);
 		
-		void writeReg(byte reg, byte value);
+		int writeReg(byte reg, byte value);
 		byte readReg(byte reg);
 		
 		void read(void);

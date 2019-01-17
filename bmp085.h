@@ -27,7 +27,7 @@
 
 #include <Arduino.h>
 
-void bmp085init();
+int bmp085init();
 short bmp085GetTemperature(unsigned int ut);
 long bmp085GetPressure(unsigned long up);
 char bmp085Read(unsigned char address);

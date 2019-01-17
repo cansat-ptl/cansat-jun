@@ -8,7 +8,7 @@ int ac1, ac2, ac3, b1, b2, mb;
 unsigned int ac4;
 long b5;
 
-void bmp085init(){
+int bmp085init(){
 	//Reading calibration values from BMP
 	ac1 = bmp085ReadInt(BMP085_CAL_REG_AC1);
 	ac2 = bmp085ReadInt(BMP085_CAL_REG_AC2);
@@ -17,6 +17,10 @@ void bmp085init(){
 	b1 = bmp085ReadInt(BMP085_CAL_REG_B1);
 	b2 = bmp085ReadInt(BMP085_CAL_REG_B2);
 	mb = bmp085ReadInt(BMP085_CAL_REG_MB);	
+	if (ac1 == -1){
+		return -1;
+	}
+	return 0;
 }
 short bmp085GetTemperature(unsigned int ut){
 	//Making temperature correction using calibration values
@@ -55,21 +59,12 @@ long bmp085GetPressure(unsigned long up){
     p += (x1 + x2 + 3791)>>4;
     return p;
 }
-char bmp085Read(unsigned char address){
-    Wire.beginTransmission(BMP085_ADDRESS);
-    Wire.write(address);
-    Wire.endTransmission();
-    Wire.requestFrom(BMP085_ADDRESS, 1);
-    while(!Wire.available())
-        ;
-    return Wire.read();
-}
 int bmp085ReadInt(unsigned char address){
     unsigned char msb, lsb;
     Wire.beginTransmission(BMP085_ADDRESS);
     Wire.write(address);
     Wire.endTransmission();
-    Wire.requestFrom(BMP085_ADDRESS, 2);
+    if(Wire.requestFrom(BMP085_ADDRESS, 2) == 0) return -1;
     while(Wire.available()<2)
         ;
     msb = Wire.read();

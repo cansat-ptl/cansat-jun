@@ -15,7 +15,7 @@
 
 #include <Arduino.h>
 
-void adxl345init();
+int adxl345init();
 void adxl345request(byte r1, byte r2);
 int adxl345readX();
 int adxl345readY();

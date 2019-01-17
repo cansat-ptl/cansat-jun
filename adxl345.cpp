@@ -3,9 +3,9 @@
 #include <SPI.h>
 #include "adxl345.h"
 
-void adxl345init(){
+int adxl345init(){
 	Wire.beginTransmission(ADXL345_ADDRESS);
-	Wire.write(ADXL345_CTRL_2D);
+	if(Wire.write(ADXL345_CTRL_2D) == 0) return -1;
 	Wire.write(ADXL345_CTRL_2DV);     
 	Wire.endTransmission();	
 	delay(50);
@@ -13,13 +13,14 @@ void adxl345init(){
 	Wire.write(ADXL345_CTRL_FORMAT);
 	Wire.write(ADXL345_CTRL_FORMATV);   	
 	Wire.endTransmission();
+	return 0;
 }
 void adxl345request(byte r1, byte r2){
 	Wire.beginTransmission(ADXL345_ADDRESS); // transmit to device
 	Wire.write(r1);
 	Wire.write(r2);
 	Wire.endTransmission();
-	Wire.requestFrom(ADXL345_ADDRESS ,2); 
+	Wire.requestFrom(ADXL345_ADDRESS ,2);
 }
 int adxl345readX(){
 	int X0 = 0,X1 = 0,X_out = 0;

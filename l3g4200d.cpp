@@ -11,20 +11,22 @@
 // Public Methods //////////////////////////////////////////////////////////////
 
 // Turns on the L3G4200D's gyro and places it in normal mode.
-void L3G4200D::enableDefault(void)
+int L3G4200D::enableDefault(void)
 {
 	// 0x0F = 0b00001111
 	// Normal power mode, all axes enabled
-	writeReg(L3G4200D_CTRL_REG1, 0x0F);
+	if(writeReg(L3G4200D_CTRL_REG1, 0x0F) == -1) return -1;
+	else return 0;
 }
 
 // Writes a gyro register
-void L3G4200D::writeReg(byte reg, byte value)
+int L3G4200D::writeReg(byte reg, byte value)
 {
 	Wire.beginTransmission(GYR_ADDRESS);
-	Wire.write(reg);
+	if(Wire.write(reg) == 0) return -1;
 	Wire.write(value);
 	Wire.endTransmission();
+	return 0;
 }
 
 // Reads a gyro register
