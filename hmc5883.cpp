@@ -7,9 +7,7 @@ int HMC5883init(){
 	if(Wire.write(HMC5883_CTRL_MODE) == 0){
 		return -1;
 	}
-	if(Wire.write(HMC5883_CTRL_MODEV)){
-		return -1;
-	}
+	Wire.write(HMC5883_CTRL_MODEV);
 	Wire.endTransmission();
 	return 0;
 }

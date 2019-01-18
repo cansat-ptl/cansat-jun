@@ -1,5 +1,5 @@
 /* #---------------Cubesat-control---------------# *
- * |               v 0.3.1-bleeding              | *
+ * |               v 0.3.6-bleeding              | *
  * |  A cansat-jun fork for SiriusSat            | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -12,6 +12,8 @@
  * |        Light sensors                        | *
  * |                                             | *
  * #---------------------------------------------# */
+ 
+ //IMPORTANT: Engine and orientation control disabled for safety reasons
  
 #include <Wire.h>
 #include <SPI.h>
@@ -28,32 +30,29 @@
 
 /* 
    DEFINES:
-    SD_CS - sdcard SPI chip select pin (default: 35). Pulldown this pin to GND to set up the SD card. Must be disabled while operating. INT
+    SD_CS - sdcard SPI chip select pin (default: 34). Pulldown this pin to GND to set up the SD card. Must be disabled while operating. INT
     VREF - battery reference voltage (default: 4.5F). Used to determine battery charge level. This voltage is made by voltage divider. FLOAT
     VDIV - voltage divider coefficient (default: 2). DO NOT CHANGE FLOAT
     CALLSIGN - satellite callsign, should be as short as possible. STRING
 	ONEWIREPIN - one wire bus pin (default: 36)
 	TEMPERATURE_PRECISION - DS28B20 measurement resolution in bits (default: 8)
-	RWHEELPIN - reaction wheel control pin (default: 34)
+	RWHEELPIN - reaction wheel control pin (default: 35) - OCR3A timer output
 	TARGET - camera point angle in degrees(default: 90)
 */
 
-#define SD_CS 35
+#define SD_CS 34
 #define VREF 4.5F
 #define VDIV 2
-#define CALLSIGN "YKTSAT5"
-#define VER "CubesatControl v0.3.1-bleeding"
+#define CALLSIGN "YKTSAT2"
+#define VER "CubesatControl v0.3.6-bleeding"
 #define ONEWIREPIN 36
 #define TEMPERATURE_PRECISION 8
-#define RWHEELPIN 34
+#define RWHEELPIN 35
 #define TARGET 90
-
 #ifndef INT_MAX
 #define INT_MAX 32767
 #endif
-/*
-   LIBRARY SETUP
-*/
+
 L3G4200D gyro;
 TinyGPSPlus gps;
 OneWire oneWire(ONEWIREPIN); 
@@ -61,18 +60,30 @@ DallasTemperature sensors(&oneWire);
 DeviceAddress insideThermometer, outsideThermometer;
 Servo rwheel;
 
-double Kp=200,Ki=1.5,Kd=0.75;
-double Setpoint=TARGET,rpm=10000,temp=0;
-PID myPID(&temp,&rpm,&Setpoint,Kp,Ki,Kd,DIRECT);
-bool actives[4] = {false, false, false, false};
+//double Kp=200,Ki=1.5,Kd=0.75; //PID coefficients setup
+//double Setpoint=TARGET,rpm=10000,temp=0; //Motor control variables setup
+//PID myPID(&temp,&rpm,&Setpoint,Kp,Ki,Kd,DIRECT);
+bool actives[4] = {false, false, false, false}; //List of active sensors, 0 - gyroscope, 1 - reserved, 2 - magnetometer, 3 - accelerometer
+bool led = false; //Indication led switch
+//int oldangle = 1488; DISABLED
+unsigned short int timer = 10; //Cycle counter, used to switch 'tasks'
+//float baseAlt = 0; DEPRECATED
+String dataL[] = {"ET=", "GX=", "GY=", "GZ=", "VBAT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "ANGL=", "RPM=", "DBG=", "IT=", "OT="}; //Data labels
 
-unsigned short int timer = 20;
-float baseAlt = 0;
-String dataL[] = {"ET=", "GX=", "GY=", "GZ=", "VBAT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "ANGL=", "RPM=", "DBG=", "RSVD=", "RSVD="}; //Data labels
+//ET - elapsed time
+//GX, GY, GZ - gyroscope dat 
+//VBAT - battery voltage
+//AX, AY, AZ - accelerometer data
+//MX, MY, MZ - magnetometer data
+//ANGL - current magnetic course
+//RMP - reaction wheel speed
+//DBG - current timer value, debug only
+//IT - internal temperature
+//OT - external temperature
 
 void formPacket(int * data, int start, int amount){
     String buffer0;
-    for(int i = start; i < (start + amount); i++){ //5 variables at once
+    for(int i = start; i < (start + amount); i++){ //i variables at once
 		buffer0 += dataL[i]; //Adding data labels
 		buffer0 += String(*(data+i)); //Adding data
 		buffer0 += " "; //Separator
@@ -83,11 +94,11 @@ void formPacket(int * data, int start, int amount){
 void sendData(String data){
 	data = String(CALLSIGN) + "[MAIN]: " + data + ";\n";
 	Serial1.print(data);
-	//File dataFile = SD.open("yktsat5.log", FILE_WRITE);
-	//if (dataFile) {
-		//dataFile.println(data);
-		//dataFile.close();
-	//}
+	File dataFile = SD.open("yktsat5.log", FILE_WRITE);
+	if (dataFile) {
+		dataFile.println(data);
+		dataFile.close();
+	}
 }
 
 void sendgps(){
@@ -100,6 +111,7 @@ void sendgps(){
 	printDateTime(gps.date, gps.time);
 	Serial1.println(";");
 }
+
 int ds18b20init(){
 	int count = 0;
 	sensors.begin();
@@ -110,24 +122,52 @@ int ds18b20init(){
     sensors.setResolution(outsideThermometer, TEMPERATURE_PRECISION);
 	return count;
 }
+
 void ds18b20read(int *temp, DeviceAddress deviceAddress){
 	*temp = (sensors.getTempC(deviceAddress))*10;
 }
 
-double rw_setspeed(int a, int b){
+/* DISABLED
+void arm(){
+	rwheel.write(0);
+	delay(1000);
+}
+void setSpeed(int speed){
+	int angle = map(speed, 0, 100, 1000, 2020); //Sets servo positions to different speeds 
+	rwheel.writeMicroseconds(angle);
+}
+
+void spinUp(){
+	for(int speed = 0; speed <= 50; speed += 5) { //Cycles speed up to 70% power for 1 second
+		int angle = map(speed, 0, 100, 1000, 2020); //Sets servo positions to different speeds 
+		rwheel.writeMicroseconds(angle);
+	}
+	delay(1000);
+}
+
+void rw_setspeed(int a, int b){
     a*=(-1);
     temp = atan2((float)a,(float)b)/(3.1415F)*180.0F;
     if (temp < (Setpoint - 180))
         temp += 360;
     else if (temp > (Setpoint + 180))
         temp -= 360;
-    myPID.Compute();         // computing current RPM 
-    return rpm;
+    myPID.Compute(); 	// computing current RPM 
 }
-
+*/
 void setup(){
+	/* DISABLED
+	rwheel.attach(RWHEELPIN);
+	arm();
+	delay(1000);
+	spinUp();
+	myPID.SetOutputLimits(0, 20000);
+    myPID.SetMode(AUTOMATIC);
+	*/
+	
 	pinMode(51, OUTPUT);
 	digitalWrite(51, HIGH);
+	
 	delay(5000);
 	Serial.begin(9600);
 	Serial1.begin(9600);
@@ -145,13 +185,15 @@ void setup(){
 	else sendData(F("L3G ERR"));
 	delay(50);
 	
-	//bmp085init();
+	/* DEPRECATED
+	bmp085init();
 	delay(50);
-	//float temp = 0;
-	//bmp085GetTemperature(bmp085ReadUT()); 
-	//temp = bmp085GetPressure(bmp085ReadUP());
-	//baseAlt = calcAltitude(temp);
+	float temp = 0;
+	bmp085GetTemperature(bmp085ReadUT()); 
+	temp = bmp085GetPressure(bmp085ReadUP());
+	baseAlt = calcAltitude(temp);
 	sendData(F("BMP DISABLED"));
+	*/
 	
 	if(HMC5883init() == 0){
 	    sendData(F("HMC OK"));
@@ -166,31 +208,24 @@ void setup(){
 	}
 	else sendData(F("ADXL ERR"));
 	delay(50);
+
+	SD.begin(SD_CS);
+	sendData("SD OK");
+	delay(50);	
 	
-	rwheel.attach(RWHEELPIN);
-	rwheel.write(0);
-	delay(1000);
-	sendData("RW OK");
-	
-	//SD.begin(SD_CS);
-	//sendData("SD OK");
-	//delay(50);	
-	
-	//ds18b20init();
-	//sendData("DS18 OK");
-	//delay(50);	
-	myPID.SetOutputLimits(0, 20000);
-    myPID.SetMode(AUTOMATIC);
+	ds18b20init();
+	sendData("DS18 OK");
+	delay(50);	
   
 	sendData("INIT OK");
 	digitalWrite(51, LOW);
 	delay(500);
 }
-bool led = false;
+
 void loop(){
-	int x = HMC5883readX();
-	int z = HMC5883readZ();
-	if (timer == 20){
+	//int x = HMC5883readX(); DISABLED
+	//int z = HMC5883readZ();
+	if (timer == 10){
 	    gyro.read();
 		timer = 0;
 	    static int data[16];
@@ -205,8 +240,7 @@ void loop(){
 			data[2] = INT_MAX;
 			data[3] = INT_MAX;
 		}
-	    data[4] = 0;
-	    //if (data[4] < 0) data[4] = 0;
+	    data[4] = analogRead(A0);
 		if(actives[3]){
 	        data[5] = adxl345readX();
 	        data[6] = adxl345readY();
@@ -227,14 +261,11 @@ void loop(){
 			data[9] = INT_MAX;
 			data[10] = INT_MAX;
 		}
-	    data[11] = temp; 
-	    data[12] = rpm;
+	    data[11] = 0; 
+	    data[12] = 0;
 	    data[13] = timer;
-	    data[14] = 0;
-	    data[15] = 0;
-	
-	    //ds18b20read(data+14, insideThermometer);
-	    //ds18b20read(data+15, outsideThermometer);
+	    ds18b20read(data+14, insideThermometer);
+	    ds18b20read(data+15, outsideThermometer);
         
         formPacket(data, 0, 5);
         formPacket(data, 5, 11);
@@ -252,9 +283,23 @@ void loop(){
 		}
 	}
 	timer++;
-	delay(50);
-	rpm = rw_setspeed(z, x);
-	rwheel.write(map((int)rpm, 0, 20000, 0, 120));
+	delay(100);
+	
+	/* DISABLED
+	rw_setspeed(z, x);
+	int angle = map(rpm, 0, 20000, 1000, 2020); //Sets servo positions to different speeds 
+	if (oldangle <= angle){
+		for (int i = oldangle; i <= angle; i+=16){
+			rwheel.writeMicroseconds(i);
+		}
+	}
+	else {
+		for (int i = oldangle; i > angle; i-=16){
+			rwheel.writeMicroseconds(i);
+		}
+	}
+	oldangle = angle;
+	*/
 }
 
 	
