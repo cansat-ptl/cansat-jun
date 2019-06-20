@@ -9,9 +9,8 @@
 #define LED1 13
 
 #include <Arduino.h>
+#include <matrix8.h>
 
-void blink();
-void shiftOut(byte data);
 void handleIndicators();
 
 #endif

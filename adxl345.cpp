@@ -31,7 +31,7 @@ int adxl345readX(){
 		X1=X1<<8;
 		X_out=X0+X1;   
 	}
-	Xg=(X_out/32.0)*10;
+	Xg=(X_out/32.0)*100;
 	return (int)Xg;
 }
 int adxl345readY(){
@@ -44,7 +44,7 @@ int adxl345readY(){
 		Y1=Y1<<8;
 		Y_out=Y0+Y1;
 	}
-	Yg=(Y_out/32.0)*10;
+	Yg=(Y_out/32.0)*100;
 	return (int)Yg;
 }
 int adxl345readZ(){
@@ -57,6 +57,6 @@ int adxl345readZ(){
 		Z1=Z1<<8;
 		Z_out=Z0+Z1;
 	}
-	Zg=(Z_out/32.0);
+	Zg=(Z_out/32.0)*100;
 	return (int)Zg;
 }

@@ -60,6 +60,3 @@ class L3G4200D
 };
 
 #endif
-
-
-
