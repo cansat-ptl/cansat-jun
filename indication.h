@@ -8,6 +8,8 @@
 #define BAT A0
 #define LED1 13
 
+#define USE_MATRIX 0
+
 #include <Arduino.h>
 #include <matrix8.h>
 

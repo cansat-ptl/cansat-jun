@@ -1,5 +1,5 @@
 /* #------------CanSat-junior-control------------# *
- * |               v 1.7.1-bleeding              | *
+ * |                  v 1.8.0                    | *
  * |  Made by ThePetrovich for SJSA CanSat team  | *
  * |                                             | *
  * |    Hardware list:                           | *
@@ -50,11 +50,11 @@
 #define LRES A2
 #define LVAL 450
 #define SERVO 12
-#define CALLSIGN "YKTSAT6"
-#define VER "CJC v1.7.1-bleeding"
+#define CALLSIGN "YKTSAT7"
+#define VER "v1.8.0-git"
 
 /*
-   LIBRARY SETUP
+	LIBRARY SETUP
 */
 Servo myservo;
 L3G4200D gyro;
@@ -67,32 +67,40 @@ float baseAlt = 0;
 int darkness = LVAL;
 String dataL[] = {"ET=", "T=", "PRS=", "VBAT=", "ALT=", "AX=", "AY=", "AZ=", "MX=", "MY=", "MZ=", "GX=", "GY=", "GZ="}; //Data labels
 
-void formPacket(long int * data, int start, int amount){
-    String buffer0;
-    for(int i = start; i < (start + amount); i++){ //5 variables at once
+void formPacket(long int * data, int start, int amount)
+{
+	String buffer0;
+
+	for(int i = start; i < (start + amount); i++){ //5 variables at once
 		buffer0 += dataL[i]; //Adding data labels
 		buffer0 += String(*(data+i)); //Adding data
 		buffer0 += " "; //Separator
 	}
-    sendData(buffer0);
+
+	sendData(buffer0);
 }
 
-void sendData(String data){
+void sendData(String data)
+{
+	File dataFile = SD.open("yktsat4.log", FILE_WRITE);
+
 	data = String(CALLSIGN) + ": " + data + ";\n";
+
 	Serial.print(data);
 	ss.print(data);
-	File dataFile = SD.open("yktsat4.log", FILE_WRITE);
+
 	if (dataFile) {
 		dataFile.println(data);
 		dataFile.close();
 	}
 }
 
-void setup(){
+void setup()
+{
 	delay(5000);
 	Serial.begin(9600);
 	ss.begin(9600);
-	sendData("Running "+String(VER) + " compiled " + String(__TIMESTAMP__));
+	sendData("Running " + String(VER) + " compiled " + String(__TIMESTAMP__));
 	sendData("WARMUP");
 	
 	myservo.attach(SERVO);
@@ -101,7 +109,7 @@ void setup(){
 	delay(250);
 	sendData("SERVO OK");
 	darkness = analogRead(LRES);
-	while (analogRead(LRES)+50 >= darkness){
+	while (analogRead(LRES)+50 >= darkness) {
 		sendData("WAITING");
 		delay(1000);
 	}
@@ -149,28 +157,37 @@ void setup(){
 	delay(2000);
 	
 }
-void handleServo(){
-    int light = 0;
+
+void handleServo()
+{
+	int light = 0;
 	light = analogRead(LRES);
-	if (detach && !deployed){
-		myservo.attach(SERVO);
+
+	if (detach && !deployed) {
 		angle = 5;
+		myservo.attach(SERVO);
 		myservo.write(angle);
 		delay(500);
 		myservo.detach();
+
 		sendData("DEPLOY " + String(millis()/1000));
+
 		deployed = true;
 	}
-	if(light >= darkness-50 && !deployed){
+
+	if (light >= darkness-50 && !deployed) {
 		sendData("DETACH " + String(millis()/1000));
 		detach = true;
 		delay(500);
 	}
 }
 
-void loop(){
-	gyro.read();
+void loop()
+{
 	static long int data[14];
+
+	gyro.read();
+
 	data[0] = millis()/1000;
 	data[1] = bmp085GetTemperature(bmp085ReadUT()); 
 	data[2] = bmp085GetPressure(bmp085ReadUP());
@@ -186,14 +203,14 @@ void loop(){
 	data[11] = (int)gyro.g.x;
 	data[12] = (int)gyro.g.y;
 	data[13] = (int)gyro.g.z;
-    
-    formPacket(data, 0, 5);
-    formPacket(data, 5, 9);
-    
-    handleServo();
-    handleIndicators();
-    
-	delay(750);
+	
+	formPacket(data, 0, 5);
+	formPacket(data, 5, 9);
+
+	handleServo();
+	handleIndicators();
+
+	delay(100);
 }
 
 	

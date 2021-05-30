@@ -7,11 +7,11 @@ void adxl345init(){
 	Wire.beginTransmission(ADXL345_ADDRESS);
 	Wire.write(ADXL345_CTRL_2D);
 	Wire.write(ADXL345_CTRL_2DV);     
-	Wire.endTransmission();	
+	Wire.endTransmission();
 	delay(50);
 	Wire.beginTransmission(ADXL345_ADDRESS);
 	Wire.write(ADXL345_CTRL_FORMAT);
-	Wire.write(ADXL345_CTRL_FORMATV);   	
+	Wire.write(ADXL345_CTRL_FORMATV);
 	Wire.endTransmission();
 }
 void adxl345request(byte r1, byte r2){
